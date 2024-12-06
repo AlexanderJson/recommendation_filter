@@ -1,13 +1,13 @@
+from flask import Flask, jsonify, request
 import numpy as np
+
+
+app = Flask(__name__)
 
 cols = 4
 rows = 70
 ratings_file = "ratings"
 user_id = 10
-
-def save_preferences(matrix,filename):
-    np.savetxt(filename, matrix, fmt='%d', delimiter=',', header='film_id,genre_id,user_id,rating', comments='')
-    print("success")
 
 def read_preferences(filename):
     matrix = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=float)
@@ -24,29 +24,24 @@ def filter_user(all_ratings):
     identical_1 = np.tile([0,0,0, user_id], (rows, 1))
     user_found = all_ratings - identical_1
     filtered_user = user_found[user_found[:, 3] == 0]
-    print(" FILTERED USER: ", filtered_user, "----------------------------------")
     return filtered_user
 
 ##interface later
 def filter_user_ratings(user):
     filter_ratings = user[:, 2]
-    print("FILTERED RATINGS: ", filter_ratings, "----------------------------------")
     return filter_ratings
 
 def calculate_recommendations(user,user_ratings):
     mean = np.mean(user_ratings)
     distance = user_ratings - mean
-    print(distance, "----------------------------------")
     return distance
 
 def filter_user_genres(user):
     genre_found = user[:, 1]
-    print(" FILTERED GENRES: ", genre_found, "----------------------------------")
     return genre_found
 
 def filter(index,matrix):
     filter_ratings = matrix[:, index]
-    print("--------------", filter_ratings, "----------------------------------")
     return filter_ratings
 
 def recommend_movie():
@@ -61,6 +56,17 @@ def recommend_movie():
     recommendation_matrix = np.maximum(0, rating_genres)
     print("Rated: ", recommendation_matrix)
 
+
+    ## aggregated socring (to get the percentages for fun): 
+
+    ## remove duplicates in col 1 (genres)
+    unique_genres = np.unique(recommendation_matrix[:,0])
+    genre_sums = {genre: np.sum(recommendation_matrix[recommendation_matrix[:, 0] == genre, 1]) for genre in unique_genres}
+
+    ##TODO : fix more here:
+    total_score = np.sum(list(genre_sums.values()))
+    genre_percentages = {genre: f"{(score / total_score) * 100:.2f}%" if total_score > 0 else 0 for genre, score in genre_sums.items()}
+    return genre_percentages
 recommend_movie()
 
 
@@ -72,3 +78,14 @@ recommend_movie()
 ## make: good % to make a border for user rating and genres. If user only rated 1 movie genre
 ## in matix with 1000 rows, that genre is irrelevant. Gradiant solves?
 
+
+
+## REST API SECTION
+
+@app.route('/recommend', methods=['GET'])
+def get_recommended_movies():
+    recommendations = recommend_movie()
+    return jsonify(recommendations)
+
+if __name__ == '__main__':
+    app.run(debug=True)
