@@ -7,7 +7,6 @@ app = Flask(__name__)
 cols = 4
 rows = 70
 ratings_file = "ratings"
-user_id = 10
 
 def read_preferences(filename):
     matrix = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=float)
@@ -20,7 +19,8 @@ def get_user_matrix():
 
 ## filters out the user by id and finds all user interactions
 ## make this more abstract for different filter scenarios
-def filter_user(all_ratings):
+def filter_user(all_ratings, user_id):
+    rows = all_ratings.shape[0]
     identical_1 = np.tile([0,0,0, user_id], (rows, 1))
     user_found = all_ratings - identical_1
     filtered_user = user_found[user_found[:, 3] == 0]
@@ -44,9 +44,9 @@ def filter(index,matrix):
     filter_ratings = matrix[:, index]
     return filter_ratings
 
-def recommend_movie():
+def recommend_movie(user_id):
     all_actions = get_user_matrix()
-    user_actions = filter_user(all_actions)
+    user_actions = filter_user(all_actions, user_id)
     user_ratings = filter(2,user_actions)
     print("Rating: ")
     rating_gradient = calculate_recommendations(user_actions,user_ratings)
@@ -67,7 +67,6 @@ def recommend_movie():
     total_score = np.sum(list(genre_sums.values()))
     genre_percentages = {genre: f"{(score / total_score) * 100:.2f}%" if total_score > 0 else 0 for genre, score in genre_sums.items()}
     return genre_percentages
-recommend_movie()
 
 
 ## TODO: add more complex recommendations later on with movie ID etc. Need to make another matrix for movies
@@ -83,9 +82,45 @@ recommend_movie()
 ## REST API SECTION
 
 @app.route('/recommend', methods=['GET'])
+def get_recommended():
+    return jsonify({"message: ": "General recommendations WIP"})
+
+
+@app.route('/recommend/genre', methods=['POST'])
 def get_recommended_movies():
-    recommendations = recommend_movie()
-    return jsonify(recommendations)
+    data = request.json
+    print(f"Received data: {data}")
+
+    user_id = data.get("userid")
+
+    if user_id is None:
+        return jsonify({"error": "Missing userID"}), 400
+
+    try:
+        recommendations = recommend_movie(user_id)
+        return jsonify(recommendations)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_rating', methods=['POST'])
+def add_rating():
+    data = request.json
+    print(f"Received data: {data}")
+
+    film_id = data.get("filmID")
+    genre_id = data.get("genreID")
+    user_id = data.get("userID")
+    rating = data.get("rating", 5.0) ## TODO fix rating
+
+    if genre_id is None or user_id is None:
+        return jsonify({"error": "Missing genreID or userID"}), 400
+    
+    try: 
+        with open(ratings_file, "a") as file:
+            file.write(f"{film_id},{genre_id},{rating},{user_id}\n")
+        return jsonify({"message": "Movie rated"}), 201
+    except Exception as e: 
+        return jsonify({"error": str(e)}),500
 
 if __name__ == '__main__':
     app.run(debug=True)
